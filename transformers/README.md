@@ -11,7 +11,15 @@ Using the [Hugging Face image captioning Transformers documentation notes.](http
 ```
 *Leave the environment at any time using `deactivate`. Rejoin using the latter of the two above commands.*
 
-2. Install the necessary libraries in the virual enviornment
+2. Install the necessary libraries in the virual environment
 ```
-    pip install transformers datasets evaluate -q
-    pip install jiwer -q
+    pip install transformers datasets evaluate
+    pip install jiwer
+    pip install matplotlib numpy pillow
+```
+
+3. Authenticate into [Hugging Face](https://huggingface.co) after creating an account online and generating an access key
+```
+    huggingface-cli login
+```
+*This is only valid for the virtual environment, so if the environment is destroyed, a new key will need to be generated.*
