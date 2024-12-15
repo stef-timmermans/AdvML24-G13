@@ -5,3 +5,4 @@ jiwer
 matplotlib
 numpy
 pillow
+dotenv

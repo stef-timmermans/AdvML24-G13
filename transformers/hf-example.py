@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from datasets import load_dataset
 from textwrap import wrap
 import matplotlib.pyplot as plt
@@ -22,25 +24,52 @@ def plot_images(images, captions):
         plt.axis("off")
     plt.show()
 
+def authenticate():
+    """
+    Authenticates with Hugging Face using an access token from the .env file.
+
+    Returns:
+        str: Hugging Face access token.
+
+    Raises:
+        EnvironmentError: If the .env file is missing or the token is not set.
+        ValueError: If the token is empty.
+    """
+    # Load .env file
+    load_dotenv()
+
+    token = os.getenv("HUGGINGFACE_HUB_TOKEN")
+    if not token:
+        raise ValueError("HUGGINGFACE_HUB_TOKEN environment variable not set or empty.")
+
+    return token
+
 def main():
-    # Load the dataset
-    ds = load_dataset("lambdalabs/pokemon-blip-captions")
-    print(ds)
+    try:
+        # Authenticate and retrieve the Hugging Face token
+        token = authenticate_huggingface()
 
-    # Split the dataset into train and test sets
-    ds = ds["train"].train_test_split(test_size=0.1)
-    train_ds = ds["train"]
-    test_ds = ds["test"]
+        # Load the dataset with authentication
+        ds = load_dataset("lambdalabs/pokemon-blip-captions", use_auth_token=token)
+        print(ds)
 
-    print(f"Training samples: {len(train_ds)}")
-    print(f"Testing samples: {len(test_ds)}")
+        # Split the dataset into train and test sets
+        ds = ds["train"].train_test_split(test_size=0.1)
+        train_ds = ds["train"]
+        test_ds = ds["test"]
 
-    # Select sample images and captions
-    sample_images_to_visualize = [np.array(train_ds[i]["image"]) for i in range(5)]
-    sample_captions = [train_ds[i]["text"] for i in range(5)]
+        print(f"Training samples: {len(train_ds)}")
+        print(f"Testing samples: {len(test_ds)}")
 
-    # Plot the samples
-    plot_images(sample_images_to_visualize, sample_captions)
+        # Select sample images and captions
+        sample_images_to_visualize = [np.array(train_ds[i]["image"]) for i in range(5)]
+        sample_captions = [train_ds[i]["text"] for i in range(5)]
+
+        # Plot the samples
+        plot_images(sample_images_to_visualize, sample_captions)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
