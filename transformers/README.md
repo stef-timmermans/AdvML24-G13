@@ -13,13 +13,17 @@ Using the [Hugging Face image captioning Transformers documentation notes.](http
 
 2. Install the necessary libraries in the virual environment
 ```
-    pip install transformers datasets evaluate
-    pip install jiwer
-    pip install matplotlib numpy pillow
+    pip install -r requirements.txt
 ```
 
-3. Authenticate into [Hugging Face](https://huggingface.co) after creating an account online and generating an access key
-```
-    huggingface-cli login
+
+3. Through [Hugging Face](https://huggingface.co), create an account online and generate an access key
 ```
 *This is only valid for the virtual environment, so if the environment is destroyed, a new key will need to be generated.*
+
+4. Rename `.env.example` to `.env` and paste in the access key where appropriate
+
+5. Run the file
+```
+    python hf-example.py
+```
