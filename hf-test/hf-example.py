@@ -24,33 +24,18 @@ def plot_images(images, captions):
         plt.axis("off")
     plt.show()
 
-def authenticate():
-    """
-    Authenticates with Hugging Face using an access token from the .env file.
-
-    Returns:
-        str: Hugging Face access token.
-
-    Raises:
-        EnvironmentError: If the .env file is missing or the token is not set.
-        ValueError: If the token is empty.
-    """
-    # Load .env file
-    load_dotenv()
-
-    token = os.getenv("HUGGINGFACE_HUB_TOKEN")
-    if not token:
-        raise ValueError("HUGGINGFACE_HUB_TOKEN environment variable not set or empty.")
-
-    return token
-
 def main():
     try:
-        # Authenticate and retrieve the Hugging Face token
-        token = authenticate_huggingface()
+        # Load environment variables from .env file
+        load_dotenv()
+
+        # Retrieve the Hugging Face token
+        # hf-token = os.getenv("HUGGING_FACE_TOKEN")
+        # if not hf-token:
+        #     raise ValueError("HUGGING_FACE_TOKEN environment variable not set or empty.")
 
         # Load the dataset with authentication
-        ds = load_dataset("lambdalabs/pokemon-blip-captions", use_auth_token=token)
+        ds = load_dataset("lambdalabs/pokemon-blip-captions")
         print(ds)
 
         # Split the dataset into train and test sets
