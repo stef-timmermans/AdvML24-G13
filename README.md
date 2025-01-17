@@ -3,9 +3,20 @@ Repository for Advanced Machine Learning Group 13 (2024/2025 academic year).
 
 ### Instructions
 
-1. [Download the "2014 Train/Val annotations \[241MB\]" and "2014 Testing Image info \[1MB\]".](https://cocodataset.org/#download)
+1. [Download relevant files from cocodatset.org](https://cocodataset.org/#download)
+- From the "Images" column:
+  - 2014 Train Images [83K/13GB]
+  - 2014 Val images [41K/6GB]
+  - 2014 Test images [41K/6GB]
+- From the "Annotations" column:
+  - 2014 Train/Val annotations [241MB]
+  - 2014 Training Image info [1MB]
 
-2. Take the contents out of the two downloaded folders (all of the .json files) and paste them into the `/dataset` folder. The folder should now contain the seven .json files in addition to the gitkeep.
+<br>
+
+2. Place all five folders into `/dataset`.
+
+<br>
 
 3. Run the notebook in a virtual environment.
 ```
