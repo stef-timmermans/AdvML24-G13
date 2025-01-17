@@ -7,3 +7,4 @@ tensorflow
 tqdm
 scikit-learn
 pycocotools
+tensorflow
