@@ -12,6 +12,8 @@ Repository for Advanced Machine Learning Group 13 (2024/2025 academic year).
   - 2014 Train/Val annotations [241MB]
   - 2014 Training Image info [1MB]
 
+*If on macOS, the two annotations folders may appear with plain names. If so, rename these to `annotations_trainval2014` and `annotations_test2014`, respectively.*
+
 <br>
 
 2. Place all five folders into `/dataset`.
