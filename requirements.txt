@@ -1,0 +1,10 @@
+einops
+numpy
+matplotlib
+pandas
+seaborn
+tensorflow
+tqdm
+scikit-learn
+pycocotools
+tensorflow

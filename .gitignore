@@ -1,0 +1,9 @@
+# Ignore virtual environment
+/mlenv
+
+# Ignore everything in the /dataset directory
+/dataset/*
+
+# Allow .gitkeep files in the /dataset directory
+# (To make the folder still show up in git)
+!/dataset/.gitkeep
