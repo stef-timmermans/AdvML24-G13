@@ -8,3 +8,5 @@ tqdm
 scikit-learn
 pycocotools
 tensorflow
+tensorflow_text
+tensorflow_datasets
