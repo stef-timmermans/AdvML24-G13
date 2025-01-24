@@ -10,4 +10,4 @@ pycocotools
 tensorflow_text
 tensorflow_datasets
 tensorflow_hub
-Pillow
+pillow
