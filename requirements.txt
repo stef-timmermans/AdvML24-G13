@@ -6,5 +6,7 @@ seaborn
 tensorflow
 tqdm
 scikit-learn
+pycocoevalcap
 pycocotools
-tensorflow
+pillow
+keras_tuner

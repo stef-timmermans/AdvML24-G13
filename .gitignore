@@ -4,6 +4,7 @@
 # Ignore everything in the /dataset directory
 /dataset/*
 /processed_dataset/*
+/hyperparameter_tuning/**/*.h5
 
 # Allow .gitkeep files in the /dataset directory
 # (To make the folder still show up in git)
