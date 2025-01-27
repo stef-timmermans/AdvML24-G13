@@ -1,6 +1,4 @@
 import os
-import re
-import string
 import tensorflow as tf
 
 from pycocotools.coco import COCO
@@ -65,19 +63,19 @@ def setup_test_set(coco: COCO):
     test_images_path = "dataset/test2014/"
     test_image_ids = coco.getImgIds()
 
-    test_image_paths = []
+    img_id_path_pairs = []
+
     for img_id in test_image_ids:
         img_metadata = coco.loadImgs(img_id)[0]
-        test_image_paths.append(os.path.join(test_images_path, img_metadata['file_name']))
+        img_path = os.path.join(test_images_path, img_metadata['file_name'])
+        img_id_path_pairs.append((img_id, img_path))
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(test_image_paths)
+    test_dataset = tf.data.Dataset.from_generator(
+        lambda: img_id_path_pairs,
+        output_signature=(
+            tf.TensorSpec(shape=(), dtype=tf.int64),
+            tf.TensorSpec(shape=(), dtype=tf.string)
+        )
+    )
 
     return test_dataset
-
-
-# Custom standardize function for TextVectorization layer
-def standardize(s):
-    s = tf.strings.lower(s) # Lowercase
-    s = tf.strings.regex_replace(s, f'[{re.escape(string.punctuation)}]', '') # Remove puncuation
-    s = tf.strings.join(['[START]', s, '[END]'], separator=' ') # Add [START] and [END] tokens to the text
-    return s

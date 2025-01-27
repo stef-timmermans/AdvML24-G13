@@ -1,15 +1,20 @@
 import collections
 import einops
 import tqdm
+import re
+import string
 
-import tensorflow as tf
+import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 
-from tensorflow.keras.layers import Embedding, Layer, Add, MultiHeadAttention, LayerNormalization, Dense, Dropout, StringLookup
+from tensorflow.keras.layers import Embedding, Layer, Add, MultiHeadAttention, LayerNormalization, Dense, Dropout, StringLookup, TextVectorization
 from tensorflow.keras import Sequential, Model
+from tensorflow.keras.callbacks import Callback
 
-from utils.dataset import load_image
+from utils.dataset import load_image 
 
+# Model Architecture, source: https://www.tensorflow.org/text/tutorials/image_captioning#a_transformer_decoder_model
 class SeqEmbedding(Layer):
     def __init__(self, vocab_size, max_length, depth):
         super().__init__()
@@ -27,11 +32,18 @@ class SeqEmbedding(Layer):
     def call(self, seq):
         seq = self.token_embedding(seq) # (batch, seq, depth)
 
-        x = tf.range(tf.shape(seq)[1])  # (seq)
-        x = x[tf.newaxis, :]  # (1, seq)
-        x = self.pos_embedding(x)  # (1, seq, depth)
+        x = tf.range(tf.shape(seq)[1])
+        x = x[tf.newaxis, :]
+        x = self.pos_embedding(x)
 
         return self.add([seq,x])
+    
+    def get_config(self):
+        return {
+            "vocab_size": self.vocab_size,
+            "max_length": self.max_length,
+            "depth": self.depth
+        }
 
 
 class CausalSelfAttention(Layer):
@@ -39,7 +51,6 @@ class CausalSelfAttention(Layer):
         super().__init__()
 
         self.mha = MultiHeadAttention(**kwargs)
-        # Use Add instead of + so the keras mask propagates through.
         self.add = Add() 
         self.layernorm = LayerNormalization()
 
@@ -48,6 +59,9 @@ class CausalSelfAttention(Layer):
                         use_causal_mask=True)
         x = self.add([x, attn])
         return self.layernorm(x)
+    
+    def get_config(self):
+        return self.mha.get_config()
 
 
 class CrossAttention(Layer):
@@ -65,6 +79,9 @@ class CrossAttention(Layer):
 
         x = self.add([x, attn])
         return self.layernorm(x)
+    
+    def get_config(self):
+        return self.mha.get_config()
 
 
 class FeedForward(Layer):
@@ -82,6 +99,12 @@ class FeedForward(Layer):
     def call(self, x):
         x = x + self.seq(x)
         return self.layernorm(x)
+    
+    def get_config(self):
+        return {
+            "units": self.units,
+            "dropout_rate": self.dropout_rate
+        }
 
 
 class DecoderLayer(Layer):
@@ -105,6 +128,13 @@ class DecoderLayer(Layer):
         out_seq = self.ff(out_seq)
 
         return out_seq
+    
+    def get_config(self):
+        return {
+            "units": self.units,
+            "num_heads": self.num_heads,
+            "dropout_rate": self.dropout_rate
+        }
 
 
 class TokenOutput(Layer):
@@ -152,11 +182,35 @@ class TokenOutput(Layer):
 
     def call(self, x):
         x = self.dense(x)
-        # TODO(b/250038731): Fix this.
-        # An Add layer doesn't work because of the different shapes.
-        # This clears the mask, that's okay because it prevents keras from rescaling
-        # the losses.
         return x + self.bias
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "tokenizer": {
+                "max_tokens": self.tokenizer.vocabulary_size(),
+                "output_sequence_length": 50,
+                "standardize": standardize,
+                "ragged": True,
+                "vocabulary": self.tokenizer.get_vocabulary()
+            },
+            "banned_tokens": self.banned_tokens
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        tokenizer_config = config.pop("tokenizer")
+
+        tokenizer = TextVectorization(
+            max_tokens=tokenizer_config["max_tokens"],
+            output_sequence_length=tokenizer_config["output_sequence_length"],
+            standardize=standardize,
+            ragged=tokenizer_config["ragged"]
+        )
+        tokenizer.set_vocabulary(tokenizer_config["vocabulary"])
+
+        return cls(tokenizer=tokenizer, **config)
 
 
 class Captioner(Model):
@@ -198,25 +252,28 @@ class Captioner(Model):
             for n in range(num_layers)
         ]
 
-        self.output_layer = output_layer
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.units = units
+        self.max_length = max_length
+        self.dropout_rate = dropout_rate
 
-    @classmethod
-    def add_method(cls, fun):
-        setattr(cls, fun.__name__, fun)
-        return fun
+        self.output_layer = output_layer
     
     def call(self, inputs):
         image, txt = inputs
 
+        # Check if image
         if image.shape[-1] == 3:
-            # Apply the feature-extractor, if you get an RGB image.
+            # Use CNN on image
             image = self.feature_extractor(image)
 
         # Flatten the feature map
         image = einops.rearrange(image, 'b h w c -> b (h w) c')
 
+        # Check if string
         if txt.dtype == tf.string:
-            # Apply the tokenizer if you get string inputs.
+            # Apply the tokenizer on string
             txt = self.tokenizer(txt)
 
         txt = self.seq_embedding(txt)
@@ -228,21 +285,70 @@ class Captioner(Model):
         txt = self.output_layer(txt)
 
         return txt
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "tokenizer": {
+                "max_tokens": self.tokenizer.vocabulary_size(),
+                "output_sequence_length": 50,
+                "standardize": standardize,  # Save function name
+                "ragged": True,
+                "vocabulary": self.tokenizer.get_vocabulary()
+            },
+            "feature_extractor": tf.keras.utils.serialize_keras_object(self.feature_extractor),
+            "output_layer": tf.keras.utils.serialize_keras_object(self.output_layer),
+            "word_to_index": tf.keras.utils.serialize_keras_object(self.word_to_index),
+            "index_to_word": tf.keras.utils.serialize_keras_object(self.index_to_word),
+            "num_layers": self.num_layers,
+            "units": self.units,
+            "max_length": self.max_length,
+            "num_heads": self.num_heads,
+            "dropout_rate": self.dropout_rate
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        tokenizer_config = config.pop("tokenizer")
+        # standardize_function = globals().get("standardize")
+        
+        tokenizer = TextVectorization(
+            max_tokens=tokenizer_config["max_tokens"],
+            output_sequence_length=tokenizer_config["output_sequence_length"],
+            standardize=standardize,
+            ragged=tokenizer_config["ragged"]
+        )
+        tokenizer.set_vocabulary(tokenizer_config["vocabulary"])
+
+        feature_extractor = tf.keras.utils.deserialize_keras_object(config.pop("feature_extractor"))
+        output_layer = tf.keras.utils.deserialize_keras_object(config.pop("output_layer"))
+        
+        return cls(
+            tokenizer=tokenizer,
+            feature_extractor=feature_extractor,
+            output_layer=output_layer,
+            num_layers=config["num_layers"],
+            units=config["units"],
+            max_length=config["max_length"],
+            num_heads=config["num_heads"],
+            dropout_rate=config["dropout_rate"]
+        )
 
     def simple_gen(self, image, temperature=1):
-        initial = self.word_to_index([['[START]']]) # (batch, sequence)
+        initial = self.word_to_index([['[START]']])
         img_features = self.feature_extractor(image[tf.newaxis, ...])
 
-        tokens = initial # (batch, sequence)
+        tokens = initial
 
         for n in range(50):
-            preds = self((img_features, tokens)).numpy()  # (batch, sequence, vocab)
-            preds = preds[:,-1, :]  #(batch, vocab)
+            preds = self((img_features, tokens)).numpy()
+            preds = preds[:,-1, :]
             if temperature==0:
-                next = tf.argmax(preds, axis=-1)[:, tf.newaxis]  # (batch, 1)
+                next = tf.argmax(preds, axis=-1)[:, tf.newaxis]
             else:
-                next = tf.random.categorical(preds/temperature, num_samples=1)  # (batch, 1)
-            tokens = tf.concat([tokens, next], axis=1) # (batch, sequence) 
+                next = tf.random.categorical(preds/temperature, num_samples=1)
+            tokens = tf.concat([tokens, next], axis=1)
 
             if next[0] == self.word_to_index('[END]'):
                 break
@@ -251,25 +357,25 @@ class Captioner(Model):
         result = tf.strings.reduce_join(words, axis=-1, separator=' ')
         return result.numpy().decode()
     
-    # def run_and_show_attention(self, image, temperature=0.0):
-    #     result_txt = self.simple_gen(image, temperature)
-    #     str_tokens = result_txt.split()
-    #     str_tokens.append('[END]')
+    def run_and_show_attention(self, image, temperature=0.0):
+        result_txt = self.simple_gen(image, temperature)
+        str_tokens = result_txt.split()
+        str_tokens.append('[END]')
 
-    #     attention_maps = [layer.last_attention_scores for layer in self.decoder_layers]
-    #     attention_maps = tf.concat(attention_maps, axis=0)
-    #     attention_maps = einops.reduce(
-    #         attention_maps,
-    #         'batch heads sequence (height width) -> sequence height width',
-    #         height=7, width=7,
-    #         reduction='mean')
+        attention_maps = [layer.last_attention_scores for layer in self.decoder_layers]
+        attention_maps = tf.concat(attention_maps, axis=0)
+        attention_maps = einops.reduce(
+        attention_maps,
+        'batch heads sequence (height width) -> sequence height width',
+        height=7, width=7,
+        reduction='mean')
 
-    #     plot_attention_maps(image/255, str_tokens, attention_maps)
-    #     t = plt.suptitle(result_txt)
-    #     t.set_y(1.05)
+        plot_attention_maps(image/255, str_tokens, attention_maps)
+        t = plt.suptitle(result_txt)
+        t.set_y(1.05)
 
 
-class GenerateText(tf.keras.callbacks.Callback):
+class GenerateText(Callback):
     def __init__(self, image_shape):
         image_url = 'https://tensorflow.org/images/surf.jpg'
         image_path = tf.keras.utils.get_file('surf.jpg', origin=image_url)
@@ -282,3 +388,31 @@ class GenerateText(tf.keras.callbacks.Callback):
             result = self.model.simple_gen(self.image, temperature=t)
             print(result)
         print()
+
+
+# Graph function
+def plot_attention_maps(image, str_tokens, attention_map):
+    fig = plt.figure(figsize=(16, 9))
+
+    len_result = len(str_tokens)
+
+    titles = []
+    for i in range(len_result):
+      map = attention_map[i]
+      grid_size = max(int(np.ceil(len_result/2)), 2)
+      ax = fig.add_subplot(3, grid_size, i+1)
+      titles.append(ax.set_title(str_tokens[i]))
+      img = ax.imshow(image)
+      ax.imshow(map, cmap='gray', alpha=0.6, extent=img.get_extent(),
+                clim=[0.0, np.max(map)])
+
+    plt.tight_layout()
+
+
+# Custom standardize function for TextVectorization layer
+@tf.keras.utils.register_keras_serializable()
+def standardize(s):
+    s = tf.strings.lower(s) # Lowercase
+    s = tf.strings.regex_replace(s, f'[{re.escape(string.punctuation)}]', '') # Remove puncuation
+    s = tf.strings.join(['[START]', s, '[END]'], separator=' ') # Add [START] and [END] tokens to the text
+    return s
